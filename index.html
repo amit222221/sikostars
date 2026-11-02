@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>SIKO STARS</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SIKO STARS">
+  <meta name="theme-color" content="#1d5ad6">
+  <style>
+    html, body { margin: 0; height: 100%; background: #1d5ad6; color: #fff; font: 800 18px system-ui, sans-serif; }
+    .box { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 20px; box-sizing: border-box; }
+    .logo { font-size: 46px; color: #ffd23a; text-shadow: 0 4px 0 #1a1426; letter-spacing: 1px; }
+    .spin { width: 42px; height: 42px; border-radius: 50%; border: 6px solid rgba(255,255,255,.25); border-top-color: #ffd23a; animation: s .8s linear infinite; }
+    @keyframes s { to { transform: rotate(360deg); } }
+    button { font: 900 20px system-ui, sans-serif; padding: 12px 26px; border-radius: 14px; border: 3px solid #1a1426; background: #ffd23a; color: #1a1426; }
+  </style>
+</head>
+<body>
+  <div class="box" id="box"><div class="logo">SIKO STARS</div><div class="spin"></div><div id="msg">Finding the server...</div></div>
+  <script>
+  // SIKO STARS permanent page. This file never needs to change: it finds where the game server is today
+  // (the computer posts its current link to a free ntfy.sh noticeboard when it starts) and loads the
+  // latest game from there. Progress stays on this address, so it survives any server link change.
+  (async function () {
+    var TOPIC = 'sikostars-p1waxribokbtykcf8za4';
+    var LINK_OK = /^https:\/\/[a-z0-9-]+\.(trycloudflare\.com|ngrok-free\.dev|ngrok-free\.app|ngrok\.app)$/i;
+    var msg = document.getElementById('msg');
+    var hdr = function (u) { return /ngrok/i.test(u) ? { 'ngrok-skip-browser-warning': '1' } : {}; };
+    async function alive(u) {
+      try { var r = await fetch(u + '/api/ping', { method: 'POST', body: '{}', headers: hdr(u), cache: 'no-store' }); return r.ok; } catch (e) { return false; }
+    }
+    async function latest() {
+      try {
+        var r = await fetch('https://ntfy.sh/' + TOPIC + '/json?poll=1&since=all', { cache: 'no-store' });
+        var lines = (await r.text()).trim().split('\n'), url = null;
+        lines.forEach(function (l) { try { var m = JSON.parse(l); if (m.event === 'message' && LINK_OK.test(String(m.message).trim())) url = String(m.message).trim(); } catch (e) {} });
+        return url;
+      } catch (e) { return null; }
+    }
+    async function start() {
+      msg.textContent = 'Finding the server...';
+      var url = null;
+      try { url = localStorage.getItem('siko_server'); } catch (e) {}
+      if (!url || !LINK_OK.test(url) || !(await alive(url))) { url = await latest(); if (url && !(await alive(url))) url = null; }
+      if (!url) {
+        document.getElementById('box').innerHTML = '<div class="logo">SIKO STARS</div><div>The game server is off right now.<br>Ask the host to start it, then try again.</div><button id="again">TRY AGAIN</button>';
+        document.getElementById('again').onclick = function () { location.reload(); };
+        return;
+      }
+      try { localStorage.setItem('siko_server', url); } catch (e) {}
+      msg.textContent = 'Loading the game...';
+      var html = await (await fetch(url + '/index.html', { headers: hdr(url), cache: 'no-store' })).text();
+      // Game files load from the server link; the game itself (saves, account) lives on this page's address.
+      var head = '<head><base href="' + url + '/"><script>window.SIKO_SERVER=' + JSON.stringify(url) + ';<\/script>';
+      document.open(); document.write(html.replace('<head>', head)); document.close();
+    }
+    start();
+  })();
+  </script>
+</body>
+</html>
